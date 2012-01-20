@@ -1,0 +1,18 @@
+<?php
+// $Id$
+/**
+ * Install the cstw_feed module
+ *
+ * @file
+ */
+
+/**
+ * Implementation of hook_uninstall().
+ */
+function cstw_feed_uninstall() {
+
+  // Clear the global variables
+  variable_del('cstw_feed_url');
+  variable_del('cstw_feed_limit');
+  
+} // function cstw_feed_uninstall()

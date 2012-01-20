@@ -1,0 +1,172 @@
+<?php
+// $Id$
+
+// Add the CSS
+drupal_add_css(drupal_get_path('module', 'cstw_feed') .'/cstw_feed.css');
+
+/**
+ * Display help and module information
+ * @param path which path of the site we're displaying help
+ * @param arg array that holds the current path as would be returned from arg() function
+ * @return help text for the path
+ */
+function cstw_feed_help($path, $arg) {
+  $output = '';
+  switch ($path) {
+    case "admin/help#cstw_feed":
+      $output = '<p>'.  t("Creates a feed from a given URL and displays a given number of items from it.") .'</p>';
+      break;
+  }
+  return $output;
+} // function cstw_feed_help
+
+/**
+* Valid permissions for this module
+* @return array An array of valid permissions for the cstw_feed module
+*/
+function cstw_feed_perm() {
+  return array('access cstw_feed content');
+} // function cstw_feed_perm()
+
+/**
+ * Generate HTML for the cstw_feed block
+ * @param op the operation from the URL
+ * @param delta offset
+ * @returns block HTML 
+ */
+function cstw_feed_block($op='list', $delta=0) {
+  // Set up the block.
+  $block = array();
+
+  if ($op == "list") {
+    // Generate listing of blocks from this module, for the admin/block page.
+
+    $block[0]["info"] = t('CSTW Feed');
+  }
+  elseif ($op == 'view') {
+
+    // Generate our block content.
+
+    // Content variable that will be returned for display.
+    $block_content = '<div id="cstw-feed">';
+	
+	$xml_file = variable_get("cstw_feed_url", 'https://kb.osu.edu/dspace/feed/rss_2.0/1811/45174');
+	
+	$xml = simplexml_load_file($xml_file);
+	
+	$i = variable_get('cstw_feed_limit', '5');
+	
+	$playerlocation = drupal_get_path('module', 'cstw_feed') . '/player_mp3.swf';
+	$showdescription = variable_get("cstw_feed_showdescription", '1');
+	
+	// If i is 0, that means there is no limit on the number of results to return,
+	// so reset i to be negative so that all of the results are returned.
+	if ($i === 0) {
+      $i = 1;
+	}
+	
+    // Parse the feed looking for the fields that we want.
+    foreach($xml->children()->children()->item as $child) {
+      if ($child->children()->enclosure['url'] != "") {
+        if ($i === 0) {
+          break;
+        }
+        else {
+		  $mp3_title = $child->children()->title;
+		  $mp3_description = $child->children()->description;
+		  $mp3_url = $child->children()->enclosure['url'];
+		  $block_content .= '<div class="feed-row">' . "\n";
+      $block_content .= '  <h4 class="title">' . $mp3_title . "</h4>" . "\n";      
+		  $block_content .= '  <object type="application/x-shockwave-flash" data="' . $playerlocation . '" width="200" height="20">
+    <param name="movie" value="' . $playerlocation . '" />
+    <param name="bgcolor" value="#ffffff" />
+    <param name="FlashVars" value="mp3=' . $mp3_url . '" />
+  </object>  
+</div>' . "\n";
+          if ($showdescription == 1) {
+            $block_content .= '<div class="cstw-feed-description">' . $mp3_description . '</div>';
+          }
+          $i--;
+        }
+      }
+    }
+
+	$block_content .= '</div>';
+
+    // Fill in the subject of our block which is the same whether or not
+    // the block has any real content
+    $block['subject'] = 'CSTW Feed';
+
+    $block['content'] = $block_content;
+  }
+
+  return $block;
+}  // end cstw_feed_block
+
+function cstw_feed_admin() {
+  $form = array();
+
+  $form['cstw_feed_url'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Feed URL'),
+    '#default_value' => variable_get('cstw_feed_url', 'https://kb.osu.edu/dspace/feed/rss_2.0/1811/45174'),
+    '#size' => 40,
+    '#maxlength' => 200,
+    '#description' => t('The URL from which to grab the feed.'),
+    '#required' => TRUE,
+  );
+
+  $form['cstw_feed_limit'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Feed Limit'),
+    '#default_value' => variable_get('cstw_feed_limit', '5'),
+    '#size' => 5,
+    '#maxlength' => 2,
+    '#description' => t('The limit on the number of feed items to return. Put 0 for no limit.'),
+    '#required' => TRUE,
+  );
+  
+  $dispoptions[0] = t('Hide');
+  $dispoptions[1] = t('Show');
+  $form['cstw_feed_showdescription'] = array(
+    '#type' => 'radios',
+    '#title' => t('Show Description'),
+    '#default_value' => variable_get('cstw_feed_showdescription', 1),
+    '#options' => $dispoptions,
+    '#description' => t('You can optionally show or hide the item description.'),
+    '#required' => TRUE,
+  );
+
+  return system_settings_form($form);
+}
+
+function cstw_feed_menu() {
+
+  $items = array();
+
+  // Create location for administration page.
+  $items['admin/settings/cstw_feed'] = array(
+    'title' => 'CSTW feed module settings',
+    'description' => 'Configure the settings of the CSTW feed module.',
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('cstw_feed_admin'),
+    'access arguments' => array('access administration pages'),
+    'type' => MENU_NORMAL_ITEM,
+   );
+
+  return $items;
+}
+
+function cstw_feed_admin_validate($form, &$form_state) {
+  $person = $form_state['values']['cstw_feed_url'];
+  if (is_numeric($person)) {
+    form_set_error('cstw_feed_url', t('That is a number, not a URL.'));
+  }
+  $limit = $form_state['values']['cstw_feed_limit'];
+  if (!(is_numeric($limit))) {
+    form_set_error('cstw_feed_limit', t($limit . ' is not a valid.  Please enter a valid integer.'));
+  }
+  else if ($limit < 0) {
+    form_set_error('cstw_feed_limit', t($limit . ' is not a valid.  Please enter a positive integer.'));
+  }
+}

@@ -1,0 +1,4 @@
+; $Id$
+name = CSTW Feed
+description = Parses and displays the CSTW feed.
+core = 6.x
